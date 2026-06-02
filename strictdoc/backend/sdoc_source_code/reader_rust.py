@@ -3,7 +3,7 @@
 """
 
 from enum import IntEnum
-from pathlib import Path
+from pathlib import PurePath
 from typing import Optional, Union
 
 import tree_sitter_rust as ts_rust
@@ -197,6 +197,65 @@ class RustTsQuery(IntEnum):
     INNER_DOC_COMMENT_FILEMODULE = 2
     NORMAL_COMMENT = 3
     IDENTIFIABLE_ITEM = 4
+
+
+def rust_file_module_segments(filename: str) -> list[str]:
+    """
+    Rust module path of a source file's items, inferred from the file path and
+    prefixed with the crate/target root marker cargo-nextest names tests under.
+    Applies the inverse of Rust's standard file<->module mapping (the reader
+    sees one file at a time, so it cannot follow ``mod`` declarations)::
+
+        src/lib.rs | src/main.rs   -> ["lib"] | ["main"]   (crate root)
+        src/model.rs               -> ["lib", "model"]
+        src/model/mod.rs           -> ["lib", "model"]
+        src/model/tests.rs         -> ["lib", "model", "tests"]
+        tests/it.rs                -> ["it"]               (integration target)
+        tests/it/helper.rs         -> ["it", "helper"]
+
+    Exact for the conventional crate layout. ``#[path = "..."]`` on a ``mod``
+    and non-default Cargo target paths (``[lib] path = ...``) are unsupported:
+    resolving them needs cross-file / Cargo context the reader does not have.
+    """
+    # PurePath uses the host OS path flavor, so the native full_path the reader
+    # is given (posix or Windows) splits correctly without manual normalizing.
+    parts = PurePath(filename).parts
+    anchors = ("src", "tests", "examples", "benches")
+    anchor_index = next(
+        (i for i in range(len(parts) - 1, -1, -1) if parts[i] in anchors),
+        None,
+    )
+
+    def module_name(file: str) -> str:
+        return file[:-3] if file.endswith(".rs") else file
+
+    if anchor_index is None:
+        return [module_name(parts[-1])] if parts else []
+
+    anchor = parts[anchor_index]
+    rest = list(parts[anchor_index + 1 :])
+    if not rest:
+        return []
+    dir_segments, stem = rest[:-1], module_name(rest[-1])
+
+    if anchor == "src":
+        # lib.rs / main.rs are the crate root; any other file is a module named
+        # by its path below src/ (mod.rs takes its directory's name). The crate
+        # may be a lib or a bin, but convert_nextest_test_to_rust_canonical_paths
+        # tries both "lib::" and "main::", so "lib" resolves for a bin too.
+        if not dir_segments and stem in ("lib", "main"):
+            return [stem]
+        module = list(dir_segments) + ([] if stem == "mod" else [stem])
+        return ["lib", *module]
+
+    # tests/, examples/, benches/: each top-level file or directory is its own
+    # binary target. The first component is the target (its crate root); the
+    # rest is the module path within it.
+    target = dir_segments[0] if dir_segments else stem
+    module = list(dir_segments[1:])
+    if dir_segments and stem not in ("mod", "main"):
+        module.append(stem)
+    return [target, *module]
 
 
 def comments_text_from_comment_nodes(comments: list[Node]) -> str:
@@ -480,7 +539,7 @@ class ParserRun:
             line_end=item.end_point[0] + 1,
             code_byte_range=ByteRange.create_from_ts_node(item),
             child_functions=[],
-            markers=[],
+            markers=function_markers,
             attributes={FunctionAttribute.DEFINITION},
         )
         if len(source_node.fields) > 0:
@@ -602,7 +661,11 @@ class ParserRun:
                     name = assert_cast(name_node.text, bytes).decode("utf-8")
                     path_prefix_segments.append(name)
                 cursor = cursor.parent
-            path_prefix_segments.append(Path(self.parse_context.filename).stem)
+            path_prefix_segments.extend(
+                reversed(
+                    rust_file_module_segments(self.parse_context.filename)
+                )
+            )
             path_prefix = "::".join(reversed(path_prefix_segments))
 
         # rust-lang.org: The canonical path is defined as a path prefix appended by the path segment the item itself
