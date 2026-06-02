@@ -13,3 +13,11 @@ CHECK-TEST-REPORT: hello_world_crate::tests::add_fails
 CHECK-TEST-REPORT: FAILED
 CHECK-TEST-REPORT: href="../../_source_files/src/lib.rs.html#hello_world_crate::tests::add_fails#11#13"
 CHECK-TEST-REPORT: src/lib.rs, <i>lines: 11-13</i>, function lib::tests::add_fails()
+
+# Ensure that the requirement page surfaces the linked test result and its
+# FAILED status (in a dedicated TESTS field and as the node's aggregate status).
+RUN: %cat "%T/html/%THIS_TEST_FOLDER/docs/input.html" | filecheck %s --check-prefix CHECK-REQ
+CHECK-REQ: data-test-status='failed'
+CHECK-REQ: <sdoc-node-field-label>TESTS:</sdoc-node-field-label>
+CHECK-REQ: hello_world_crate::tests::add_fails
+CHECK-REQ: <span class="requirement__test-status" data-test-status="failed">FAILED</span>
