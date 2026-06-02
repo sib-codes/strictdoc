@@ -18,6 +18,10 @@ from strictdoc.backend.sdoc.models.reference import (
     FileEntryFormat,
     FileReference,
 )
+from strictdoc.core.constants import (
+    TEST_RESULT_NODE_TYPE,
+    TestResultStatus,
+)
 from strictdoc.core.file_system.file_tree import File
 from strictdoc.core.project_config import ProjectConfig
 from strictdoc.helpers.cast import assert_cast, assert_optional_cast
@@ -181,7 +185,7 @@ class JUnitXMLReader:
 
                 test_case_node_uid: str
                 test_case_node_title: str
-                test_case_node_status: str = "PASSED"
+                test_case_node_status: str = TestResultStatus.PASSED
                 test_case_node_test_path: Optional[str] = None
                 test_case_node_test_function: Optional[str] = None
 
@@ -213,9 +217,9 @@ class JUnitXMLReader:
                     )
 
                 if xml_failure_or_none is not None:
-                    test_case_node_status = "FAILED"
+                    test_case_node_status = TestResultStatus.FAILED
                 elif xml_skipped_or_none is not None:
-                    test_case_node_status = "SKIPPED"
+                    test_case_node_status = TestResultStatus.SKIPPED
 
                 #
                 # Different tools produce different outputs when it comes to how
@@ -328,7 +332,7 @@ class JUnitXMLReader:
 
                 testcase_node = SDocNode(
                     parent=test_suite_section,
-                    node_type="TEST_RESULT",
+                    node_type=TEST_RESULT_NODE_TYPE,
                     fields=[],
                     relations=[],
                 )

@@ -23,7 +23,11 @@ from strictdoc.backend.sdoc_source_code.models.source_file_info import (
     SourceFileTraceabilityInfo,
 )
 from strictdoc.core.asset_manager import AssetManager
-from strictdoc.core.constants import GraphLinkType
+from strictdoc.core.constants import (
+    TEST_RESULT_NODE_TYPE,
+    GraphLinkType,
+    TestResultStatus,
+)
 from strictdoc.core.document_iterator import SDocDocumentIterator
 from strictdoc.core.document_meta import DocumentMeta
 from strictdoc.core.document_tree import DocumentTree
@@ -353,6 +357,22 @@ class TraceabilityIndex:
             )
         )
 
+    def get_child_relations_with_roles_excluding_test_results(
+        self, node: SDocNode
+    ) -> List[Tuple[SDocNode, Optional[str]]]:
+        """
+        Child relations of a requirement, minus its TEST_RESULT children.
+
+        Test results are rendered in their own dedicated field (with pass/fail
+        badges) rather than mixed into the generic "RELATIONS (Child)" list.
+        """
+        assert isinstance(node, SDocNode)
+        return [
+            (child_, role_)
+            for child_, role_ in self.get_child_relations_with_roles(node)
+            if child_.node_type != TEST_RESULT_NODE_TYPE
+        ]
+
     def get_children_requirements(
         self, requirement: SDocNode
     ) -> List[SDocNode]:
@@ -367,6 +387,48 @@ class TraceabilityIndex:
                 edge=ALL_EDGES,
             )
         )
+
+    def get_node_test_results(self, node: SDocNode) -> List[SDocNode]:
+        """
+        Return the test-result nodes linked to a requirement.
+
+        Test reports ingested from JUnit XML are connected to the requirements
+        their tests verify through the source-code traceability machinery
+        (see FileTraceabilityIndex.validate_and_resolve), which links each
+        requirement to its covering TEST_RESULT node via an "IsSatisfiedBy"
+        child edge. This filters a requirement's children down to those nodes.
+        """
+        assert isinstance(node, SDocNode)
+        return [
+            child_
+            for child_ in self.get_children_requirements(node)
+            if child_.node_type == TEST_RESULT_NODE_TYPE
+        ]
+
+    def has_test_results(self, node: SDocNode) -> bool:
+        return len(self.get_node_test_results(node)) > 0
+
+    def get_node_test_status(self, node: SDocNode) -> Optional[str]:
+        """
+        Aggregate the status of a requirement's linked test results.
+
+        Returns FAILED if any covering test failed, else PASSED if at least one
+        passed, else SKIPPED if the only results were skipped, else None when
+        the requirement has no linked test results. FAILED takes precedence so
+        that a single failing test is never hidden by passing siblings.
+        """
+        assert isinstance(node, SDocNode)
+        statuses = {
+            test_result_.get_meta_field_value_by_title("STATUS")
+            for test_result_ in self.get_node_test_results(node)
+        }
+        if len(statuses) == 0:
+            return None
+        if TestResultStatus.FAILED in statuses:
+            return TestResultStatus.FAILED
+        if TestResultStatus.PASSED in statuses:
+            return TestResultStatus.PASSED
+        return TestResultStatus.SKIPPED
 
     def has_tags(self, document: SDocDocument) -> bool:
         return self.graph_database.has_any_link(
