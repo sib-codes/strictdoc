@@ -480,7 +480,7 @@ class ParserRun:
             line_end=item.end_point[0] + 1,
             code_byte_range=ByteRange.create_from_ts_node(item),
             child_functions=[],
-            markers=[],
+            markers=function_markers,
             attributes={FunctionAttribute.DEFINITION},
         )
         if len(source_node.fields) > 0:
