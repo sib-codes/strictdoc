@@ -88,6 +88,12 @@ tolerant of parser errors.
 from ``[Documentation]`` sections. StrictDoc can extract generated test case
 fields and relation markers from Robot files and link them to requirements and
 test session reports.
+
+8\) The JUnit XML test report reader gained a new flavor, ``cargo-nextest``
+(file extension ``.nextest.junit.xml``). Rust projects that produce JUnit
+output with `cargo-nextest <https://nexte.st>`_ can now ingest test results
+into StrictDoc and link them to requirements via the existing
+requirement-to-source traceability machinery.
 <<<
 
 [[/SECTION]]
