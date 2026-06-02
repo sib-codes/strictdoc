@@ -4671,6 +4671,26 @@ The same forward-lookup-with-candidates mechanism is used by the Google Test fla
 
 [[/SECTION]]
 
+[[SECTION]]
+MID: 1f8a5f05e07d4b20a079a0d0b4dd88b8
+TITLE: Test results in the rendered requirement output
+
+[TEXT]
+MID: e729fbdb1f0643038fade7e2b6fcf4a2
+STATEMENT: >>>
+Once a test report has been ingested, each test result is linked to the source function it covers, and that function is in turn linked to the requirements it implements or verifies. StrictDoc surfaces this on the requirement itself in the rendered HTML: a requirement that has one or more linked test results shows a dedicated ``TESTS`` field listing each test, with a status badge:
+
+- ``PASSED`` — green;
+- ``FAILED`` — red;
+- ``SKIPPED`` — grey.
+
+In addition, the requirement node carries an aggregate ``data-test-status`` derived from its linked tests (``FAILED`` if any linked test failed, otherwise ``PASSED`` if any passed, otherwise ``SKIPPED``), and a requirement with a failing test is flagged so that the failure is visible without expanding the ``TESTS`` field. This makes the consequences of a failing test visible from the requirements point of view.
+
+This display is independent of the test report format: it works for any flavor whose results resolve to source functions that requirements trace to (for example cargo-nextest for Rust, or Google Test and CTest for C/C++).
+<<<
+
+[[/SECTION]]
+
 [[/SECTION]]
 
 [[SECTION]]

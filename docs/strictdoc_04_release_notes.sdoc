@@ -94,6 +94,13 @@ test session reports.
 output with `cargo-nextest <https://nexte.st>`_ can now ingest test results
 into StrictDoc and link them to requirements via the existing
 requirement-to-source traceability machinery.
+
+9\) Test results linked to a requirement (via the source code that the
+requirement traces to) are now shown on the requirement itself in the rendered
+HTML: a dedicated ``TESTS`` field lists each linked test with a pass/fail/skip
+badge, and the requirement node is flagged when one of its tests is failing.
+This makes the consequences of a failing test visible from the requirements
+point of view.
 <<<
 
 [[/SECTION]]
