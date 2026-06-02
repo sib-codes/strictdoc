@@ -27,6 +27,10 @@
   {%- if sdoc_entity.reserved_status %}
     data-status='{{ sdoc_entity.reserved_status.lower() }}'
   {%- endif %}
+  {%- set test_status = view_object.traceability_index.get_node_test_status(sdoc_entity) %}
+  {%- if test_status %}
+    data-test-status='{{ test_status.lower() }}'
+  {%- endif %}
   show-node-type-name="{{ sdoc_entity.get_node_type_string() }}"
   data-testid="requirement-style-{{ requirement_style|d(sdoc_entity.get_requirement_style_mode()) }}"
 >
@@ -42,6 +46,7 @@
     <sdoc-scope class="node_fields_group-secondary{% if not sdoc_entity.reserved_title %} html2pdf4doc-no-hanging{% endif %}">
       {% include "components/node_field/meta/index.jinja" %}
       {% include "components/node_field/links/index.jinja" %}
+      {% include "components/node_field/test_results/index.jinja" %}
       {% include "components/node_field/files/index.jinja" %}
     </sdoc-scope>
     {% if _narrative_has_multiline_fields %}
@@ -64,6 +69,7 @@
     {% include "components/node_field/comments/index.jinja" %}
     {% include "components/node_field/multiline/index.jinja" %}
     {% include "components/node_field/links/index.jinja" %}
+    {% include "components/node_field/test_results/index.jinja" %}
     {% include "components/node_field/files/index.jinja" %}
   {% endif %}
 

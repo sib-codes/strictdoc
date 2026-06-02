@@ -493,3 +493,32 @@ sdoc-section + sdoc-section sdoc-section-title {
   color: var(--requirement-label-color);
   white-space: nowrap;
 }
+
+/* test result status badge (JUnit XML test reports linked to a requirement) */
+
+.requirement__test-status {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.5;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  background-color: var(--color-fg-secondary);
+}
+
+.requirement__test-status[data-test-status="passed"] {
+  background-color: var(--color-green);
+}
+
+.requirement__test-status[data-test-status="failed"] {
+  background-color: var(--color-red);
+}
+
+/* Flag the whole requirement node when a linked test is failing, so the
+   failure is visible without expanding the TESTS field. */
+sdoc-node-content[data-test-status="failed"] {
+  box-shadow: inset 3px 0 0 0 var(--color-red);
+}

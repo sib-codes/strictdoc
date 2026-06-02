@@ -20,11 +20,12 @@
     </sdoc-node-field>
   {%- endif %}
 
-  {%- if view_object.traceability_index.has_children_requirements(sdoc_entity) %}
+  {%- set child_relations = view_object.traceability_index.get_child_relations_with_roles_excluding_test_results(sdoc_entity) %}
+  {%- if child_relations | length > 0 %}
     <sdoc-node-field-label>RELATIONS (Child):</sdoc-node-field-label>
     <sdoc-node-field data-field-label="child relations">
       <ul class="requirement__link">
-        {%- for sdoc_entity, relation_role_ in view_object.traceability_index.get_child_relations_with_roles(sdoc_entity) %}
+        {%- for sdoc_entity, relation_role_ in child_relations %}
         <li>
           <a data-turbo="false" class="requirement__link-child" href="{{ view_object.render_node_link(sdoc_entity) }}">
             {%- if sdoc_entity.reserved_uid %}

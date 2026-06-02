@@ -9,6 +9,10 @@
   {%- if sdoc_entity.reserved_status %}
     data-status='{{ sdoc_entity.reserved_status.lower() }}'
   {%- endif %}
+  {%- set test_status = view_object.traceability_index.get_node_test_status(sdoc_entity) %}
+  {%- if test_status %}
+    data-test-status='{{ test_status.lower() }}'
+  {%- endif %}
   data-testid="requirement-style-{{ requirement_style|d(sdoc_entity.get_requirement_style_mode()) }}"
 >
   {% set title_number = true %}

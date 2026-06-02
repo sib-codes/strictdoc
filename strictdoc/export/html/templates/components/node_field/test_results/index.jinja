@@ -1,0 +1,22 @@
+{# needs sdoc_entity, see node_field/README.txt #}
+  {%- if view_object.traceability_index.has_test_results(sdoc_entity) %}
+    <sdoc-node-field-label>TESTS:</sdoc-node-field-label>
+    <sdoc-node-field data-field-label="test results">
+      <ul class="requirement__link">
+        {%- for test_result_ in view_object.traceability_index.get_node_test_results(sdoc_entity) %}
+        {%- set test_status_ = test_result_.get_meta_field_value_by_title("STATUS") %}
+        <li>
+          <a data-turbo="false" class="requirement__link-child" href="{{ view_object.render_node_link(test_result_) }}">
+            {%- if test_result_.reserved_uid %}
+            <span class="requirement__child-uid">{{ test_result_.reserved_uid }}</span>
+            {%- endif %}
+            {{ test_result_.reserved_title if test_result_.reserved_title else "" }}
+          </a>
+          {%- if test_status_ %}
+          <span class="requirement__test-status" data-test-status="{{ test_status_|lower }}">{{ test_status_ }}</span>
+          {%- endif %}
+        </li>
+        {%- endfor %}
+      </ul>
+    </sdoc-node-field>
+  {%- endif %}
