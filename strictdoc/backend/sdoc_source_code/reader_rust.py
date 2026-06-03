@@ -215,6 +215,43 @@ def comments_text_from_comment_nodes(comments: list[Node]) -> str:
     return comment_text
 
 
+def item_definition_line_begin(item: Node) -> int:
+    """
+    First 1-based line of an item's definition, folding in the leading outer
+    attributes (e.g. ``#[test]``, ``#[cfg(test)]``) and doc/line comments that
+    sit directly above it.
+
+    tree-sitter models attributes and comments as siblings of the item, so the
+    item node itself starts at the ``fn``/``struct``/``mod`` keyword. Without
+    this, a test function's range clips its ``#[test]`` attribute and ``///``
+    documentation, so the rendered source range of a linked test result shows
+    only the bare body. Mirrors the C/C++ reader, whose function range likewise
+    begins at the leading comment when present.
+    """
+    line_begin_0_based = item.start_point[0]
+    sibling = item.prev_sibling
+    while sibling is not None and sibling.type in (
+        "attribute_item",
+        "line_comment",
+        "block_comment",
+    ):
+        # A line comment node extends to the start of the following line, so its
+        # last line of content is its start row; attributes and block comments
+        # end where their end point is.
+        sibling_content_end = (
+            sibling.start_point[0]
+            if sibling.type == "line_comment"
+            else sibling.end_point[0]
+        )
+        # Stop once a blank line separates the sibling from the header: such a
+        # comment documents something else, not this definition.
+        if sibling_content_end != line_begin_0_based - 1:
+            break
+        line_begin_0_based = sibling.start_point[0]
+        sibling = sibling.prev_sibling
+    return line_begin_0_based + 1
+
+
 def special_description(item: Node, identifier_text: str) -> Optional[str]:
     """
     Make a description for language constructs that are not functions.
@@ -476,7 +513,7 @@ class ParserRun:
             parent=self.traceability_info,
             name=name,
             display_name=name,
-            line_begin=item.start_point[0] + 1,
+            line_begin=item_definition_line_begin(item),
             line_end=item.end_point[0] + 1,
             code_byte_range=ByteRange.create_from_ts_node(item),
             child_functions=[],
@@ -547,7 +584,7 @@ class ParserRun:
             parent=self.traceability_info,
             name=name,
             display_name=name,
-            line_begin=item.start_point[0] + 1,
+            line_begin=item_definition_line_begin(item),
             line_end=max(item.end_point[0] + 1, item.start_point[0] + 2),
             code_byte_range=ByteRange.create_from_ts_node(item),
             child_functions=[],
