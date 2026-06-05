@@ -3,9 +3,11 @@
 """
 
 from enum import IntEnum
-from pathlib import Path
-from typing import Optional, Union
+from functools import lru_cache
+from pathlib import Path, PurePath
+from typing import Optional, cast
 
+import toml
 import tree_sitter_rust as ts_rust
 from tree_sitter import Language, Node, Parser, Query, QueryCursor
 
@@ -18,10 +20,10 @@ from strictdoc.backend.sdoc_source_code.models.language_item_marker import (
 )
 from strictdoc.backend.sdoc_source_code.models.line_marker import LineMarker
 from strictdoc.backend.sdoc_source_code.models.range_marker import (
-    ForwardRangeMarker,
     RangeMarker,
 )
 from strictdoc.backend.sdoc_source_code.models.source_file_info import (
+    RelationMarkerType,
     SourceFileTraceabilityInfo,
 )
 from strictdoc.backend.sdoc_source_code.models.source_location import ByteRange
@@ -197,6 +199,87 @@ class RustTsQuery(IntEnum):
     INNER_DOC_COMMENT_FILEMODULE = 2
     NORMAL_COMMENT = 3
     IDENTIFIABLE_ITEM = 4
+
+
+@lru_cache(maxsize=None)
+def rust_crate_root_and_name(directory: str) -> Optional[tuple[str, str]]:
+    """
+    ``(crate_root, package_name)`` of the nearest ``Cargo.toml`` with a
+    ``[package]`` at or above ``directory``, or ``None`` if there is none. The
+    package name is kept verbatim. ``lru_cache`` memoizes the result per
+    directory, so the many files of one crate cost a single manifest read.
+    """
+    for current in (Path(directory), *Path(directory).parents):
+        manifest = current / "Cargo.toml"
+        if not manifest.is_file():
+            continue
+        try:
+            package = toml.loads(manifest.read_text(encoding="utf-8")).get(
+                "package"
+            )
+        except (OSError, toml.TomlDecodeError):
+            continue
+        if isinstance(package, dict):
+            name = package.get("name")
+            if isinstance(name, str):
+                return str(current), name
+    return None
+
+
+def rust_module_segments_within_crate(rel_parts: tuple[str, ...]) -> list[str]:
+    """
+    Module path of a source file *within its crate*, from the file's path
+    relative to the crate root split into ``rel_parts``. Applies Rust's
+    file<->module convention (the reader sees one file, so it cannot follow
+    ``mod`` declarations)::
+
+        src/lib.rs | src/main.rs   -> []                 (the crate root)
+        src/model.rs               -> ["model"]
+        src/model/mod.rs           -> ["model"]
+        src/a/b/c.rs               -> ["a", "b", "c"]
+        tests/it.rs                -> ["it"]             (integration target)
+        tests/it/helper.rs         -> ["it", "helper"]
+
+    Best-effort: ``#[path = "..."]`` overrides and non-default target paths
+    need cross-file / Cargo context the reader does not have.
+    """
+
+    def module_name(file: str) -> str:
+        return file[:-3] if file.endswith(".rs") else file
+
+    if not rel_parts:
+        return []
+    target_dir, inner = rel_parts[0], list(rel_parts[1:])
+    if not inner:
+        stem = module_name(target_dir)
+        return [] if stem in ("lib", "main") else [stem]
+    *dirs, leaf = inner
+    stem = module_name(leaf)
+    if target_dir == "src" and not dirs and stem in ("lib", "main"):
+        return []
+    if stem in ("mod", "main"):
+        return dirs
+    return [*dirs, stem]
+
+
+def rust_canonical_crate_segments(full_path: Optional[str]) -> list[str]:
+    """
+    Canonical-path prefix shared by every item in a Rust file: the crate name
+    -- the ``[package]`` of the nearest ``Cargo.toml``, or the file stem when
+    there is none -- followed by the file's module path within the crate.
+    """
+    if not full_path:
+        return []
+    path = PurePath(full_path)
+    crate = rust_crate_root_and_name(str(path.parent))
+    if crate is None:
+        return [path.stem]
+    crate_root, crate_name = crate
+    try:
+        rel_parts = path.relative_to(crate_root).parts
+    except ValueError:
+        return [path.stem]
+    return [crate_name, *rust_module_segments_within_crate(rel_parts)]
 
 
 def comments_text_from_comment_nodes(comments: list[Node]) -> str:
@@ -450,11 +533,7 @@ class ParserRun:
             default_scope="function",
         )
 
-        function_markers: list[
-            Union[
-                LanguageItemMarker, LineMarker, RangeMarker, ForwardRangeMarker
-            ]
-        ] = []
+        function_markers: list[LanguageItemMarker] = []
         for marker_ in source_node.markers:
             if isinstance(marker_, LanguageItemMarker) and (
                 language_item_marker_ := marker_
@@ -480,15 +559,18 @@ class ParserRun:
             line_end=item.end_point[0] + 1,
             code_byte_range=ByteRange.create_from_ts_node(item),
             child_functions=[],
-            markers=[],
+            markers=function_markers,
             attributes={FunctionAttribute.DEFINITION},
         )
         if len(source_node.fields) > 0:
             source_node.function = new_function_for_rust_item
         self.traceability_info.source_nodes.append(source_node)
         self.traceability_info.functions.append(new_function_for_rust_item)
-        self.traceability_info.ng_map_names_to_markers[identifier_text] = (
-            function_markers
+        # list is invariant, so list[LanguageItemMarker] is not a
+        # list[RelationMarkerType] even though every element is one. The widen
+        # is sound; cast it for the map, which holds the wider type.
+        self.traceability_info.ng_map_names_to_markers[identifier_text] = cast(
+            list[RelationMarkerType], function_markers
         )
 
     def _process_normal_comment(self, comments: list[Node]) -> None:
@@ -602,7 +684,11 @@ class ParserRun:
                     name = assert_cast(name_node.text, bytes).decode("utf-8")
                     path_prefix_segments.append(name)
                 cursor = cursor.parent
-            path_prefix_segments.append(Path(self.parse_context.filename).stem)
+            path_prefix_segments.extend(
+                reversed(
+                    rust_canonical_crate_segments(self.parse_context.filename)
+                )
+            )
             path_prefix = "::".join(reversed(path_prefix_segments))
 
         # rust-lang.org: The canonical path is defined as a path prefix appended by the path segment the item itself

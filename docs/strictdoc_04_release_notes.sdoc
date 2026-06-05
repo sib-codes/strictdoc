@@ -59,6 +59,11 @@ This release contains the following enhancements:
 output with `cargo-nextest <https://nexte.st>`_ can now ingest test results
 into StrictDoc and link them to requirements via the existing
 requirement-to-source traceability machinery.
+
+2\) The Rust source reader now links cargo-nextest results to requirements for
+any crate layout -- nested modules, integration-test binaries, and multi-crate
+workspaces -- not only tests in ``src/lib.rs`` / ``src/main.rs``. Canonical
+paths are now crate-qualified.
 <<<
 
 [[/SECTION]]
